@@ -1,0 +1,690 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Client Baza</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working screen. Summary strip, search and filters, a client table that
+   folds into two-line rows on phones, and a slide-over card for one client. Route-sign
+   yellow is the single accent; status colors are separate and only mark client state. */
+:root{
+  --bg:#F2F4F7; --surface:#FFFFFF; --surface-2:#F7F8FA; --ink:#0F1B2D; --muted:#5B6778; --line:#DDE2E9;
+  --accent:#F5B800; --accent-ink:#1A1400; --focus:#0B5FA5; --danger:#B3261E; --danger-bg:#FBE9E7;
+  --s-new-fg:#1F5FBF; --s-new-bg:#E4EEFB;
+  --s-negotiating-fg:#6B46C1; --s-negotiating-bg:#EEE8FA;
+  --s-active-fg:#1B7F4B; --s-active-bg:#DFF3E8;
+  --s-lost-fg:#5B6778; --s-lost-bg:#E8EBEF;
+  --scrim:rgba(15,27,45,.45);
+  --font-display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --font-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1420; --surface:#141E2D; --surface-2:#101927; --ink:#EAEFF6; --muted:#93A0B3; --line:#26344A;
+    --accent:#F5B800; --accent-ink:#1A1400; --focus:#7FB0FF; --danger:#FF8A80; --danger-bg:#3A1C1A;
+    --s-new-fg:#7FB0FF; --s-new-bg:#172B4A;
+    --s-negotiating-fg:#B79CFF; --s-negotiating-bg:#2A2149;
+    --s-active-fg:#5FD39A; --s-active-bg:#12352A;
+    --s-lost-fg:#9AA7B8; --s-lost-bg:#222D3D;
+    --scrim:rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1420; --surface:#141E2D; --surface-2:#101927; --ink:#EAEFF6; --muted:#93A0B3; --line:#26344A;
+  --accent:#F5B800; --accent-ink:#1A1400; --focus:#7FB0FF; --danger:#FF8A80; --danger-bg:#3A1C1A;
+  --s-new-fg:#7FB0FF; --s-new-bg:#172B4A;
+  --s-negotiating-fg:#B79CFF; --s-negotiating-bg:#2A2149;
+  --s-active-fg:#5FD39A; --s-active-bg:#12352A;
+  --s-lost-fg:#9AA7B8; --s-lost-bg:#222D3D;
+  --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:26px;letter-spacing:-.01em}
+.mark{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-size:20px}
+.top-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.who{color:var(--muted);font-size:13px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(.96)}
+.btn.ghost{background:transparent}
+.btn.small{min-height:32px;padding:4px 10px;font-size:13px}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* summary strip */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.stats>div{padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stats>div+div{border-left:1px solid var(--line)}
+.k{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.v{font-family:var(--font-display);font-weight:700;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.v.sm{font-size:18px}
+@media (max-width:640px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stats>div:nth-child(3){border-left:0}
+  .stats>div:nth-child(n+3){border-top:1px solid var(--line)}
+}
+
+/* tools */
+.tools{display:flex;flex-direction:column;gap:10px}
+.tools-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search{flex:1 1 240px;min-width:0}
+.inp{width:100%;min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);outline-offset:0}
+.inp:focus{border-color:var(--focus)}
+.inp:disabled{opacity:.7}
+textarea.inp{min-height:84px;resize:vertical}
+select.inp{padding-right:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{min-height:34px;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.chip .count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"] .count{color:inherit;opacity:.7}
+.sort{width:auto;min-width:150px}
+
+/* table */
+.table{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.listhead,.row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.3fr) 128px 118px minmax(0,1fr);gap:12px;align-items:center;padding:12px 16px}
+.listhead{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding-block:9px}
+.row{cursor:pointer;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:hover{background:var(--surface-2)}
+.r-main{min-width:0}
+.r-name{font-weight:600;overflow-wrap:anywhere}
+.r-sub{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.r-phone{font-family:var(--font-mono);font-size:13px;overflow-wrap:anywhere}
+.r-call{font-size:13px;font-variant-numeric:tabular-nums}
+.r-call.overdue{color:var(--danger);font-weight:600}
+.r-call.today{font-weight:600}
+.r-ads{font-size:13px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.r-ads .unpaid{color:var(--danger);font-weight:600}
+@media (max-width:760px){
+  .listhead{display:none}
+  .row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main status" "phone call" "ads ads";gap:6px 12px}
+  .r-main{grid-area:main}.r-status{grid-area:status}.r-phone{grid-area:phone}.r-call{grid-area:call;text-align:right}.r-ads{grid-area:ads}
+  .r-ads:empty{display:none}
+}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-new{color:var(--s-new-fg);background:var(--s-new-bg)}
+.s-negotiating{color:var(--s-negotiating-fg);background:var(--s-negotiating-bg)}
+.s-active{color:var(--s-active-fg);background:var(--s-active-bg)}
+.s-lost{color:var(--s-lost-fg);background:var(--s-lost-bg)}
+.empty{padding:36px 20px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:12px;align-items:center}
+.empty strong{color:var(--ink);font-family:var(--font-display);font-size:18px}
+.banner{padding:10px 14px;border-radius:8px;background:var(--danger-bg);color:var(--danger);font-size:14px;font-weight:500}
+
+/* slide-over panel */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;justify-content:flex-end}
+.panel{width:min(580px,100%);height:100%;overflow-y:auto;background:var(--bg);border-left:1px solid var(--line);
+  padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(28px + env(safe-area-inset-bottom,0px));
+  padding-left:16px;padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+.p-head{display:flex;gap:10px;align-items:flex-start}
+.p-head .title-inp{font-family:var(--font-display);font-weight:800;font-size:22px;min-height:46px}
+.p-title{flex:1;min-width:0}
+.p-meta{color:var(--muted);font-size:12.5px;min-height:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.card h3{margin:0;font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld.wide{grid-column:1/-1}
+.fld label{font-size:12.5px;font-weight:600;color:var(--muted)}
+.with-copy{display:flex;gap:6px}
+.with-copy .inp{flex:1;min-width:0}
+@media (max-width:480px){.grid{grid-template-columns:minmax(0,1fr)}}
+.ad{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.ad-top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:var(--ink);color:var(--bg)}
+.ad-meta{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.ad-actions{display:flex;gap:8px;flex-wrap:wrap}
+.paid.on{background:var(--s-active-bg);color:var(--s-active-fg);border-color:transparent}
+.paid.off{background:var(--danger-bg);color:var(--danger);border-color:transparent}
+.ad-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;border-top:1px dashed var(--line);padding-top:12px}
+.ad-form .wide{grid-column:1/-1}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;min-height:40px}
+.check input{width:18px;height:18px}
+.note{border-left:3px solid var(--accent);padding:2px 0 2px 12px;display:flex;flex-direction:column;gap:2px}
+.note p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.note small{color:var(--muted);font-size:12.5px}
+.muted{color:var(--muted);font-size:13.5px}
+.danger-zone{display:flex;justify-content:flex-end}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500;max-width:min(92vw,420px);box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.toast.err{background:var(--danger);color:#fff}
+@media (prefers-reduced-motion:no-preference){
+  .panel{animation:slide .18s ease-out}
+  @keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true">B</span><span>Baza</span></div>
+    <div class="top-r">
+      <span class="who" id="who"></span>
+      <button class="btn primary" id="btn-new" type="button" disabled>Новый клиент</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="stats" aria-label="Сводка">
+    <div><span class="k">Клиенты</span><span class="v" id="st-total">0</span></div>
+    <div><span class="k">Активные</span><span class="v" id="st-active">0</span></div>
+    <div><span class="k">Нужно позвонить</span><span class="v" id="st-due">0</span></div>
+    <div><span class="k">Не оплачено</span><span class="v sm" id="st-unpaid">0 сум</span></div>
+  </section>
+
+  <section class="tools" aria-label="Поиск клиентов">
+    <div class="tools-row">
+      <div class="search">
+        <label class="sr" for="q">Поиск клиентов</label>
+        <input class="inp" id="q" type="search" placeholder="Поиск по компании, имени, телефону, Telegram" autocomplete="off">
+      </div>
+      <label class="sr" for="sort">Сортировка</label>
+      <select class="inp sort" id="sort">
+        <option value="recent">Недавно изменённые</option>
+        <option value="name">По названию А–Я</option>
+        <option value="next">По дате звонка</option>
+      </select>
+      <button class="btn" id="btn-export" type="button" hidden>Экспорт CSV</button>
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip" type="button" data-filter="all" aria-pressed="true">Все <span class="count">0</span></button>
+      <button class="chip" type="button" data-filter="new" aria-pressed="false">Новые <span class="count">0</span></button>
+      <button class="chip" type="button" data-filter="negotiating" aria-pressed="false">Переговоры <span class="count">0</span></button>
+      <button class="chip" type="button" data-filter="active" aria-pressed="false">Активные <span class="count">0</span></button>
+      <button class="chip" type="button" data-filter="lost" aria-pressed="false">Потерянные <span class="count">0</span></button>
+      <button class="chip" type="button" data-filter="due" aria-pressed="false">Нужно позвонить <span class="count">0</span></button>
+    </div>
+  </section>
+
+  <section class="table" aria-label="Клиенты">
+    <div class="listhead" aria-hidden="true"><span>Компания</span><span>Телефон</span><span>Статус</span><span>Звонок</span><span>Реклама</span></div>
+    <div id="list"></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <aside class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Карточка клиента"></aside>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+  var $ = function(s, r){ return (r || document).querySelector(s); };
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var STATUS = {new:'Новый', negotiating:'Переговоры', active:'Активный', lost:'Потерянный'};
+  var AD_TYPES = {tv:'ТВ', transport:'Транспорт', both:'ТВ + транспорт'};
+  var FIELDS = [
+    ['contact','Контактное лицо','text','',''],
+    ['position','Должность','text','',''],
+    ['phone','Телефон','tel','+998 90 123 45 67','copy'],
+    ['phone2','Второй телефон','tel','','copy'],
+    ['telegram','Telegram','text','@username','copy'],
+    ['email','Email','email','','copy'],
+    ['address','Адрес','text','','wide'],
+    ['source','Как узнали о нас','text','','']
+  ];
+
+  var db = null, userNs = null, dl = null, myId = null;
+  var dbState = 'pending', canWrite = true, loaded = false, slow = false;
+  var clients = new Map();
+  var ui = {filter:'all', q:'', sort:'recent', openId:null, mode:null, openedAt:0};
+  var lastFocus = null, toastTimer = null, queues = new Map();
+
+  /* ---------- helpers ---------- */
+  function todayIso(){
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDate(iso){
+    if(!iso) return '';
+    var p = iso.split('-'); if(p.length !== 3) return iso;
+    return new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('ru-RU', {day:'numeric', month:'short', year:'numeric'});
+  }
+  function fmtShort(iso){
+    var p = iso.split('-'); if(p.length !== 3) return iso;
+    return new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+  }
+  function fmtTime(ms){
+    return new Date(ms).toLocaleString('ru-RU', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+  }
+  function money(n){ return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' сум'; }
+  function dueState(c){
+    if(!c.nextCall || c.status === 'lost') return '';
+    var t = todayIso();
+    return c.nextCall < t ? 'overdue' : (c.nextCall === t ? 'today' : 'later');
+  }
+  function unpaidOf(c){
+    return (c.ads || []).reduce(function(s, a){ return s + (a.paid ? 0 : (Number(a.price) || 0)); }, 0);
+  }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function plural(n, one, few, many){
+    var m10 = n % 10, m100 = n % 100;
+    if(m10 === 1 && m100 !== 11) return one;
+    if(m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+  function toast(msg, err){
+    var t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 3800);
+  }
+  function errMsg(e){
+    var c = e && e.code;
+    if(c === 'invalid_argument') return 'Не сохранено. Попросите владельца дать вам доступ на редактирование.';
+    if(c === 'quota_exceeded') return 'База заполнена. Удалите старых клиентов, чтобы добавить новых.';
+    if(c === 'revoked') return 'Ваш доступ изменился. Обновите страницу.';
+    return (e && e.message && !c) ? e.message : 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.';
+  }
+  function arm(btn, label, run){
+    if(btn.dataset.armed){ clearTimeout(+btn.dataset.armed); delete btn.dataset.armed; run(); return; }
+    var orig = btn.textContent; btn.textContent = label; btn.classList.add('armed');
+    btn.dataset.armed = setTimeout(function(){ btn.textContent = orig; btn.classList.remove('armed'); delete btn.dataset.armed; }, 4000);
+  }
+  function nameMap(ids){
+    var uniq = Array.from(new Set(ids.filter(Boolean))), out = {};
+    if(!uniq.length) return Promise.resolve(out);
+    if(!userNs){ uniq.forEach(function(i){ out[i] = 'Коллега'; }); return Promise.resolve(out); }
+    return userNs.profiles(uniq).then(function(ps){
+      uniq.forEach(function(i){ var p = ps[i]; out[i] = p ? (p.isMe ? 'Вы' : (p.name || 'Коллега')) : 'Коллега'; });
+      return out;
+    }).catch(function(){ uniq.forEach(function(i){ out[i] = 'Коллега'; }); return out; });
+  }
+
+  /* ---------- writes (one at a time per client) ---------- */
+  function enqueue(id, job){
+    var prev = queues.get(id) || Promise.resolve();
+    var next = prev.then(job).catch(function(e){ console.error(e); toast(errMsg(e), true); });
+    queues.set(id, next); return next;
+  }
+  function patchClient(id, patch){
+    return enqueue(id, function(){
+      return db.doc('clients/' + id).update(Object.assign({}, patch, {updatedAt: Date.now(), updatedBy: myId || null}));
+    });
+  }
+  function mutateLists(id, fn){
+    return enqueue(id, function(){
+      var ref = db.doc('clients/' + id);
+      return ref.get().then(function(s){
+        if(!s.exists) throw {message: 'Этого клиента больше нет.'};
+        var d = s.data();
+        var patch = fn({ads: (d.ads || []).slice(), notes: (d.notes || []).slice()});
+        return ref.update(Object.assign({}, patch, {updatedAt: Date.now(), updatedBy: myId || null}));
+      });
+    });
+  }
+
+  /* ---------- list ---------- */
+  function visible(){
+    var q = ui.q.trim().toLowerCase();
+    var arr = Array.from(clients.entries()).map(function(e){ return Object.assign({id: e[0]}, e[1]); });
+    if(ui.filter === 'due') arr = arr.filter(function(c){ var d = dueState(c); return d === 'overdue' || d === 'today'; });
+    else if(ui.filter !== 'all') arr = arr.filter(function(c){ return c.status === ui.filter; });
+    if(q) arr = arr.filter(function(c){
+      return [c.company, c.contact, c.position, c.phone, c.phone2, c.telegram, c.email, c.address, c.source].join(' ').toLowerCase().indexOf(q) > -1;
+    });
+    if(ui.sort === 'name') arr.sort(function(a, b){ return (a.company || '').localeCompare(b.company || ''); });
+    else if(ui.sort === 'next') arr.sort(function(a, b){
+      if(!a.nextCall && !b.nextCall) return 0; if(!a.nextCall) return 1; if(!b.nextCall) return -1;
+      return a.nextCall < b.nextCall ? -1 : (a.nextCall > b.nextCall ? 1 : 0);
+    });
+    else arr.sort(function(a, b){ return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    return arr;
+  }
+
+  function renderStats(){
+    var all = Array.from(clients.values());
+    var due = all.filter(function(c){ var d = dueState(c); return d === 'overdue' || d === 'today'; }).length;
+    var unpaid = all.reduce(function(s, c){ return s + unpaidOf(c); }, 0);
+    $('#st-total').textContent = all.length;
+    $('#st-active').textContent = all.filter(function(c){ return c.status === 'active'; }).length;
+    $('#st-due').textContent = due;
+    $('#st-unpaid').textContent = money(unpaid);
+    var counts = {all: all.length, due: due};
+    Object.keys(STATUS).forEach(function(k){ counts[k] = all.filter(function(c){ return c.status === k; }).length; });
+    document.querySelectorAll('.chip').forEach(function(ch){
+      var f = ch.dataset.filter;
+      ch.querySelector('.count').textContent = counts[f] || 0;
+      ch.setAttribute('aria-pressed', String(ui.filter === f));
+    });
+  }
+
+  function renderList(){
+    var list = $('#list');
+    if(dbState === 'none'){
+      list.innerHTML = '<div class="empty"><strong>База здесь недоступна</strong><span>Откройте эту страницу в Claude под своей учётной записью, чтобы видеть и менять клиентов.</span></div>';
+      return;
+    }
+    if(!loaded){
+      list.innerHTML = '<div class="empty"><span>' + (slow ? 'Всё ещё загружается. Данные могут быть устаревшими или недоступными. Проверьте интернет.' : 'Загрузка клиентов') + '</span></div>';
+      return;
+    }
+    if(!clients.size){
+      list.innerHTML = '<div class="empty"><strong>Клиентов пока нет</strong><span>Добавьте первого клиента. Телефон, реклама и заметки о звонках будут на одной карточке.</span>' +
+        (canWrite ? '<button class="btn primary" type="button" data-act="new">Добавить первого клиента</button>' : '') + '</div>';
+      return;
+    }
+    var arr = visible();
+    if(!arr.length){
+      list.innerHTML = '<div class="empty"><strong>Ничего не найдено</strong><span>Попробуйте другое слово или фильтр.</span><button class="btn" type="button" data-act="clear">Сбросить фильтры</button></div>';
+      return;
+    }
+    list.innerHTML = arr.map(function(c){
+      var d = dueState(c), call = '', ads = c.ads || [], un = unpaidOf(c);
+      if(c.nextCall) call = d === 'overdue' ? 'Просрочен ' + fmtShort(c.nextCall) : (d === 'today' ? 'Сегодня' : fmtShort(c.nextCall));
+      else call = '<span class="muted">Звонок не назначен</span>';
+      var adsTxt = ads.length ? ads.length + ' ' + plural(ads.length, 'реклама', 'рекламы', 'реклам') + (un > 0 ? ' · <span class="unpaid">' + esc(money(un)) + ' не оплачено</span>' : '') : '';
+      var st = STATUS[c.status] ? c.status : 'new';
+      return '<div class="row" role="button" tabindex="0" data-id="' + esc(c.id) + '">' +
+        '<div class="r-main"><div class="r-name">' + esc(c.company || 'Клиент без названия') + '</div><div class="r-sub">' + esc(c.contact || 'Контактное лицо не указано') + '</div></div>' +
+        '<div class="r-phone">' + esc(c.phone || '') + '</div>' +
+        '<div class="r-status"><span class="pill s-' + st + '">' + STATUS[st] + '</span></div>' +
+        '<div class="r-call ' + d + '">' + call + '</div>' +
+        '<div class="r-ads">' + adsTxt + '</div></div>';
+    }).join('');
+  }
+
+  function render(){
+    renderStats(); renderList();
+    var nb = $('#btn-new'); nb.disabled = !(dbState === 'ready' && canWrite);
+    var b = $('#banner');
+    if(dbState === 'ready' && !canWrite){ b.textContent = 'Вы можете смотреть клиентов, но не менять их. Попросите владельца открыть вам доступ как Contributor или Editor.'; b.hidden = false; }
+    else b.hidden = true;
+    $('#btn-export').hidden = !dl;
+    if(ui.mode === 'view') refreshPanel();
+  }
+
+  /* ---------- panel ---------- */
+  function showPanel(){
+    lastFocus = document.activeElement;
+    $('#scrim').hidden = false; ui.openedAt = Date.now();
+  }
+  function closePanel(){
+    $('#scrim').hidden = true; ui.mode = null; ui.openId = null; $('#panel').innerHTML = '';
+    if(lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
+  }
+
+  function openNew(){
+    if(!canWrite || dbState !== 'ready') return;
+    ui.mode = 'new'; ui.openId = null;
+    var p = $('#panel');
+    p.innerHTML =
+      '<div class="p-head"><div class="p-title"><h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:800">Новый клиент</h2></div>' +
+      '<button class="btn ghost" type="button" data-act="close">Отмена</button></div>' +
+      '<div class="card"><div class="grid">' +
+      '<div class="fld wide"><label for="n-company">Название компании</label><input class="inp" id="n-company" data-n="company" autocomplete="off"></div>' +
+      '<div class="fld"><label for="n-contact">Контактное лицо</label><input class="inp" id="n-contact" data-n="contact" autocomplete="off"></div>' +
+      '<div class="fld"><label for="n-phone">Телефон</label><input class="inp" id="n-phone" data-n="phone" type="tel" placeholder="+998 90 123 45 67" autocomplete="off"></div>' +
+      '<div class="fld"><label for="n-telegram">Telegram</label><input class="inp" id="n-telegram" data-n="telegram" placeholder="@username" autocomplete="off"></div>' +
+      '<div class="fld"><label for="n-status">Статус</label><select class="inp" id="n-status" data-n="status">' +
+        Object.keys(STATUS).map(function(k){ return '<option value="' + k + '">' + STATUS[k] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="fld wide"><label for="n-next">Следующий звонок</label><input class="inp" id="n-next" data-n="nextCall" type="date"></div>' +
+      '</div><div class="muted">Остальное (email, адрес, реклама, заметки) можно добавить на карточке клиента после сохранения.</div>' +
+      '<button class="btn primary" type="button" data-act="create">Сохранить клиента</button></div>';
+    showPanel(); $('#n-company').focus();
+  }
+
+  function createClient(){
+    var v = {};
+    $('#panel').querySelectorAll('[data-n]').forEach(function(el){ v[el.dataset.n] = el.value.trim(); });
+    if(!v.company){ toast('Введите название компании.', true); $('#n-company').focus(); return; }
+    var now = Date.now();
+    var data = {company: v.company, contact: v.contact || '', position: '', phone: v.phone || '', phone2: '', telegram: v.telegram || '', email: '',
+      address: '', source: '', status: v.status || 'new', nextCall: v.nextCall || '', ads: [], notes: [],
+      createdBy: myId || null, createdAt: now, updatedAt: now, updatedBy: myId || null};
+    var ref = db.collection('clients').doc();
+    var btn = $('#panel [data-act="create"]'); if(btn) btn.disabled = true;
+    ref.set(data).then(function(){
+      clients.set(ref.id, data); render(); openClient(ref.id, true); toast('Клиент сохранён.');
+    }).catch(function(e){ if(btn) btn.disabled = false; toast(errMsg(e), true); });
+  }
+
+  function openClient(id, keepFocus){
+    var c = clients.get(id); if(!c) return;
+    ui.mode = 'view'; ui.openId = id;
+    var dis = canWrite ? '' : ' disabled';
+    var fieldsHtml = FIELDS.map(function(f){
+      var key = f[0], label = f[1], type = f[2], ph = f[3], kind = f[4];
+      var input = '<input class="inp" id="f-' + key + '" data-f="' + key + '" type="' + type + '" placeholder="' + esc(ph) + '" value="' + esc(c[key] || '') + '" autocomplete="off"' + dis + '>';
+      var body = kind === 'copy' ? '<div class="with-copy">' + input + '<button class="btn small" type="button" data-act="copy" data-f="' + key + '" aria-label="Копировать ' + esc(label) + '">Копировать</button></div>' : input;
+      return '<div class="fld' + (kind === 'wide' ? ' wide' : '') + '"><label for="f-' + key + '">' + esc(label) + '</label>' + body + '</div>';
+    }).join('');
+    $('#panel').innerHTML =
+      '<div class="p-head"><div class="p-title"><label class="sr" for="f-company">Компания</label>' +
+      '<input class="inp title-inp" id="f-company" data-f="company" value="' + esc(c.company || '') + '" autocomplete="off"' + dis + '></div>' +
+      '<button class="btn ghost" type="button" data-act="close">Закрыть</button></div>' +
+      '<div class="p-meta" id="p-meta"></div>' +
+      '<div class="card"><div class="grid">' +
+        '<div class="fld"><label for="f-status">Статус</label><select class="inp" id="f-status" data-f="status"' + dis + '>' +
+          Object.keys(STATUS).map(function(k){ return '<option value="' + k + '"' + (c.status === k ? ' selected' : '') + '>' + STATUS[k] + '</option>'; }).join('') + '</select></div>' +
+        '<div class="fld"><label for="f-nextCall">Следующий звонок</label><input class="inp" id="f-nextCall" data-f="nextCall" type="date" value="' + esc(c.nextCall || '') + '"' + dis + '></div>' +
+      '</div></div>' +
+      '<div class="card"><h3>Контакты</h3><div class="grid">' + fieldsHtml + '</div></div>' +
+      '<div class="card"><h3>Реклама</h3><div id="ads"></div>' +
+        (canWrite ?
+        '<div class="ad-form">' +
+          '<div class="fld wide"><label for="ad-title">Что рекламируем</label><input class="inp" id="ad-title" placeholder="например, ролик 30 секунд, вечерний эфир" autocomplete="off"></div>' +
+          '<div class="fld"><label for="ad-type">Где</label><select class="inp" id="ad-type">' +
+            Object.keys(AD_TYPES).map(function(k){ return '<option value="' + k + '">' + AD_TYPES[k] + '</option>'; }).join('') + '</select></div>' +
+          '<div class="fld"><label for="ad-price">Цена (сум)</label><input class="inp" id="ad-price" inputmode="numeric" placeholder="0" autocomplete="off"></div>' +
+          '<div class="fld"><label for="ad-start">Начало</label><input class="inp" id="ad-start" type="date"></div>' +
+          '<div class="fld"><label for="ad-end">Конец</label><input class="inp" id="ad-end" type="date"></div>' +
+          '<label class="check wide"><input type="checkbox" id="ad-paid"> Уже оплачено</label>' +
+          '<div class="wide"><button class="btn primary" type="button" data-act="add-ad">Добавить рекламу</button></div>' +
+        '</div>' : '') + '</div>' +
+      '<div class="card"><h3>Заметки и звонки</h3>' +
+        (canWrite ? '<div class="fld"><label class="sr" for="note-text">Новая заметка</label><textarea class="inp" id="note-text" placeholder="О чём говорили, о чём договорились, что делать дальше"></textarea></div>' +
+        '<div><button class="btn primary" type="button" data-act="add-note">Добавить заметку</button></div>' : '') +
+        '<div id="notes"></div></div>' +
+      (canWrite ? '<div class="danger-zone"><button class="btn danger small" type="button" data-act="del-client">Удалить клиента</button></div>' : '');
+    showPanel();
+    refreshPanel(true);
+    if(!keepFocus){ var cb = $('#panel [data-act="close"]'); if(cb) cb.focus(); }
+  }
+
+  function refreshPanel(force){
+    if(ui.mode !== 'view') return;
+    var c = clients.get(ui.openId);
+    if(!c){
+      if(Date.now() - ui.openedAt < 3000) return;
+      closePanel(); toast('Этот клиент удалён.'); return;
+    }
+    $('#panel').querySelectorAll('[data-f]').forEach(function(el){
+      if(el === document.activeElement) return;
+      var v = c[el.dataset.f]; if(v == null) v = el.dataset.f === 'status' ? 'new' : '';
+      if(el.value !== v) el.value = v;
+    });
+    renderAds(c); renderNotes(ui.openId, c); renderMeta(ui.openId, c);
+  }
+
+  function renderMeta(id, c){
+    nameMap([c.createdBy, c.updatedBy]).then(function(nm){
+      if(ui.mode !== 'view' || ui.openId !== id) return;
+      var el = $('#p-meta'); if(!el) return;
+      var parts = [];
+      if(c.createdAt) parts.push('Добавлен ' + fmtTime(c.createdAt) + (c.createdBy ? ', ' + nm[c.createdBy] : ''));
+      if(c.updatedAt && c.updatedAt !== c.createdAt) parts.push('Последнее изменение ' + fmtTime(c.updatedAt) + (c.updatedBy ? ', ' + nm[c.updatedBy] : ''));
+      el.textContent = parts.join('. ');
+    });
+  }
+
+  function renderAds(c){
+    var box = $('#ads'); if(!box) return;
+    var ads = c.ads || [];
+    if(!ads.length){ box.innerHTML = '<div class="muted">Для этого клиента рекламы пока нет.</div>'; return; }
+    box.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px">' + ads.map(function(a){
+      var dates = a.start && a.end ? fmtDate(a.start) + ' – ' + fmtDate(a.end) : (a.start ? 'С ' + fmtDate(a.start) : (a.end ? 'До ' + fmtDate(a.end) : ''));
+      var meta = [dates, a.price ? money(Number(a.price)) : ''].filter(Boolean).join(' · ');
+      return '<div class="ad" data-ad="' + esc(a.id) + '"><div class="ad-top"><span class="tag">' + esc(AD_TYPES[a.type] || 'Реклама') + '</span><strong>' + esc(a.title) + '</strong></div>' +
+        (meta ? '<div class="ad-meta">' + esc(meta) + '</div>' : '') +
+        (canWrite ? '<div class="ad-actions"><button class="btn small paid ' + (a.paid ? 'on' : 'off') + '" type="button" data-act="toggle-paid">' + (a.paid ? 'Оплачено' : 'Не оплачено') + '</button>' +
+        '<button class="btn small ghost" type="button" data-act="del-ad">Убрать</button></div>' :
+        '<div class="ad-actions"><span class="pill ' + (a.paid ? 's-active' : 's-lost') + '">' + (a.paid ? 'Оплачено' : 'Не оплачено') + '</span></div>') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function renderNotes(id, c){
+    var notes = (c.notes || []).slice().sort(function(a, b){ return b.at - a.at; });
+    nameMap(notes.map(function(n){ return n.by; })).then(function(nm){
+      if(ui.mode !== 'view' || ui.openId !== id) return;
+      var box = $('#notes'); if(!box) return;
+      if(!notes.length){ box.innerHTML = '<div class="muted">Заметок пока нет. Записывайте сюда каждый звонок и договорённость.</div>'; return; }
+      box.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' + notes.map(function(n){
+        return '<div class="note"><p>' + esc(n.text) + '</p><small>' + esc(n.by ? nm[n.by] : 'Кто-то') + ' · ' + esc(fmtTime(n.at)) + '</small></div>';
+      }).join('') + '</div>';
+    });
+  }
+
+  /* ---------- actions ---------- */
+  function addAd(){
+    var id = ui.openId; if(!id) return;
+    var title = $('#ad-title').value.trim();
+    var start = $('#ad-start').value, end = $('#ad-end').value;
+    var price = parseFloat($('#ad-price').value.replace(/[\s,]/g, ''));
+    if(!title){ toast('Сначала опишите рекламу.', true); $('#ad-title').focus(); return; }
+    if(start && end && end < start){ toast('Дата конца раньше даты начала.', true); return; }
+    var ad = {id: uid(), type: $('#ad-type').value, title: title, start: start, end: end, price: isNaN(price) ? 0 : price, paid: $('#ad-paid').checked};
+    mutateLists(id, function(d){ d.ads.push(ad); return {ads: d.ads}; });
+    ['#ad-title', '#ad-start', '#ad-end', '#ad-price'].forEach(function(s){ $(s).value = ''; });
+    $('#ad-paid').checked = false;
+  }
+  function addNote(){
+    var id = ui.openId; if(!id) return;
+    var ta = $('#note-text'), text = ta.value.trim();
+    if(!text){ toast('Сначала напишите заметку.', true); ta.focus(); return; }
+    var note = {id: uid(), text: text, by: myId || null, at: Date.now()};
+    mutateLists(id, function(d){ d.notes.push(note); return {notes: d.notes}; });
+    ta.value = '';
+  }
+  function copyField(key){
+    var el = $('#f-' + key); if(!el || !el.value) return;
+    var done = function(){ toast('Скопировано.'); };
+    var fail = function(){ el.focus(); el.select(); toast('Выделите текст и скопируйте его.', true); };
+    try{ navigator.clipboard.writeText(el.value).then(done, fail); }catch(e){ fail(); }
+  }
+
+  function csvCell(v){ v = String(v == null ? '' : v); return /[",\n\r;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function exportCsv(){
+    if(!dl) return;
+    var rows = visible();
+    if(!rows.length){ toast('Нет клиентов для экспорта.', true); return; }
+    var head = ['Компания','Контактное лицо','Должность','Телефон','Второй телефон','Telegram','Email','Адрес','Как узнали о нас','Статус','Следующий звонок','Реклама','Не оплачено (сум)','Последняя заметка'];
+    var lines = [head.map(csvCell).join(',')];
+    rows.forEach(function(c){
+      var notes = (c.notes || []).slice().sort(function(a, b){ return b.at - a.at; });
+      lines.push([c.company, c.contact, c.position, c.phone, c.phone2, c.telegram, c.email, c.address, c.source, STATUS[c.status] || '', c.nextCall,
+        (c.ads || []).map(function(a){ return (AD_TYPES[a.type] || 'Реклама') + ': ' + a.title; }).join(' | '), unpaidOf(c), notes[0] ? notes[0].text : ''].map(csvCell).join(','));
+    });
+    dl.save({filename: 'clients-' + todayIso() + '.csv', data: '﻿' + lines.join('\r\n')}).then(function(){ toast('Экспорт сохранён.'); }).catch(function(e){
+      if(e && e.code === 'declined') return;
+      toast('Экспорт здесь недоступен.', true);
+    });
+  }
+
+  /* ---------- events ---------- */
+  $('#btn-new').addEventListener('click', openNew);
+  $('#btn-export').addEventListener('click', exportCsv);
+  $('#q').addEventListener('input', function(e){ ui.q = e.target.value; renderList(); });
+  $('#sort').addEventListener('change', function(e){ ui.sort = e.target.value; renderList(); });
+  $('#chips').addEventListener('click', function(e){
+    var ch = e.target.closest('.chip'); if(!ch) return;
+    ui.filter = ch.dataset.filter; renderStats(); renderList();
+  });
+  $('#list').addEventListener('click', function(e){
+    var act = e.target.closest('[data-act]');
+    if(act){
+      if(act.dataset.act === 'new') openNew();
+      if(act.dataset.act === 'clear'){ ui.filter = 'all'; ui.q = ''; $('#q').value = ''; renderStats(); renderList(); }
+      return;
+    }
+    var row = e.target.closest('.row'); if(row) openClient(row.dataset.id);
+  });
+  $('#list').addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target.closest('.row'); if(!row || e.target !== row) return;
+    e.preventDefault(); openClient(row.dataset.id);
+  });
+  $('#scrim').addEventListener('click', function(e){ if(e.target.id === 'scrim') closePanel(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && !$('#scrim').hidden) closePanel(); });
+
+  $('#panel').addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]'); if(!b) return;
+    var a = b.dataset.act, id = ui.openId;
+    if(a === 'close') closePanel();
+    else if(a === 'create') createClient();
+    else if(a === 'add-ad') addAd();
+    else if(a === 'add-note') addNote();
+    else if(a === 'copy') copyField(b.dataset.f);
+    else if(a === 'toggle-paid'){
+      var adId = b.closest('.ad').dataset.ad;
+      mutateLists(id, function(d){ d.ads = d.ads.map(function(x){ return x.id === adId ? Object.assign({}, x, {paid: !x.paid}) : x; }); return {ads: d.ads}; });
+    }
+    else if(a === 'del-ad'){
+      var adId2 = b.closest('.ad').dataset.ad;
+      arm(b, 'Нажмите ещё раз, чтобы убрать', function(){
+        mutateLists(id, function(d){ d.ads = d.ads.filter(function(x){ return x.id !== adId2; }); return {ads: d.ads}; });
+      });
+    }
+    else if(a === 'del-client'){
+      arm(b, 'Нажмите ещё раз, чтобы удалить', function(){
+        db.doc('clients/' + id).delete().then(function(){ clients.delete(id); closePanel(); render(); toast('Клиент удалён.'); })
+          .catch(function(err){ toast(errMsg(err), true); });
+      });
+    }
+  });
+  $('#panel').addEventListener('change', function(e){
+    var el = e.target, f = el.dataset.f; if(!f || ui.mode !== 'view' || !ui.openId) return;
+    var v = el.value.trim();
+    if(f === 'company' && !v){ el.value = (clients.get(ui.openId) || {}).company || ''; toast('Название компании не может быть пустым.', true); return; }
+    var patch = {}; patch[f] = v; patchClient(ui.openId, patch);
+  });
+
+  /* ---------- start ---------- */
+  render();
+  var use = function(n){ return (window.claude && window.claude.use) ? window.claude.use(n).catch(function(){ return null; }) : Promise.resolve(null); };
+  Promise.all([use('user'), use('db'), use('downloads')]).then(function(r){
+    userNs = r[0]; db = r[1]; dl = r[2];
+    var p = Promise.resolve();
+    if(userNs){
+      p = Promise.all([userNs.id(), userNs.can('data.write'), userNs.me()]).then(function(x){
+        myId = x[0]; canWrite = x[1] !== false;
+        $('#who').textContent = 'Вы вошли как ' + (x[2].name || 'вы');
+      }).catch(function(){});
+    }
+    return p;
+  }).then(function(){
+    if(!db){ dbState = 'none'; render(); return; }
+    dbState = 'ready'; render();
+    var t = setTimeout(function(){ if(!loaded){ slow = true; render(); } }, 10000);
+    db.collection('clients').onSnapshot(function(snap){
+      clearTimeout(t); slow = false; loaded = true;
+      clients = new Map();
+      snap.docs.forEach(function(d){ clients.set(d.id, d.data()); });
+      render();
+    }, function(err){
+      clearTimeout(t); loaded = true; slow = false;
+      toast(err && err.code === 'revoked' ? 'Ваш доступ изменился. Обновите страницу.' : 'Не удалось загрузить клиентов. Обновите страницу.', true);
+      render();
+    });
+  });
+})();
+</script>
+
+</body></html>
